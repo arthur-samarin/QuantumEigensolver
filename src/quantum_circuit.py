@@ -2,6 +2,10 @@ import functools
 import operator
 import qutip
 import numpy as np
+import qiskit as qk
+import npq
+import copy
+from qiskit import QuantumRegister
 
 
 class QuantumCircuitPart:
@@ -10,6 +14,9 @@ class QuantumCircuitPart:
         self.num_params = num_params
 
     def as_operator(self):
+        pass
+
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
         pass
 
     def load_parameters(self, arr, index: int):
@@ -29,6 +36,12 @@ class CNotEntangle(QuantumCircuitPart):
     def as_operator(self):
         return self._operator
 
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        N = self.N
+        for i in range(0, N):
+            for j in range(i + 1, N):
+                circ.cx(qreg[i], qreg[j])
+
 
 class CNot(QuantumCircuitPart):
     def __init__(self, N: int, control: int, target: int):
@@ -42,6 +55,9 @@ class CNot(QuantumCircuitPart):
     def as_operator(self):
         return qutip.cnot(self.N, self.control, self.target)
 
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        circ.cx(qreg[self.control], qreg[self.target])
+
 
 class RotX(QuantumCircuitPart):
     def __init__(self, N: int, target: int, angle: float):
@@ -53,6 +69,29 @@ class RotX(QuantumCircuitPart):
 
     def as_operator(self):
         return qutip.rx(self.angle, N = self.N, target = self.target)
+
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        circ.rx(self.angle, qreg[self.target])
+
+    def load_parameters(self, arr, index: int):
+        self.angle = arr[index]
+
+    def store_parameters(self, arr, index: int):
+        arr[index] = self.angle
+
+
+class Not(QuantumCircuitPart):
+    def __init__(self, N: int, target: int):
+        assert 0 <= target < N
+
+        super().__init__(N, 1)
+        self.target = target
+
+    def as_operator(self):
+        return qutip.gate_expand_1toN(qutip.sigmax(), N = self.N, target = self.target)
+
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        circ.x(qreg[self.target])
 
     def load_parameters(self, arr, index: int):
         self.angle = arr[index]
@@ -72,6 +111,9 @@ class RotY(QuantumCircuitPart):
     def as_operator(self):
         return qutip.ry(self.angle, N = self.N, target = self.target)
 
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        circ.ry(self.angle, qreg[self.target])
+
     def load_parameters(self, arr, index: int):
         self.angle = arr[index]
 
@@ -88,7 +130,10 @@ class RotZ(QuantumCircuitPart):
         self.angle = angle
 
     def as_operator(self):
-        return qutip.rz(self.angle, N = self.N, target = self.target)
+        return qutip.phasegate(self.angle, N = self.N, target = self.target)
+
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        circ.rz(self.angle, qreg[self.target])
 
     def load_parameters(self, arr, index: int):
         self.angle = arr[index]
@@ -105,16 +150,8 @@ class Static(QuantumCircuitPart):
     def as_operator(self):
         return self.part.as_operator()
 
-
-class Reverse(QuantumCircuitPart):
-    def __init__(self, N: int, target: int):
-        assert 0 <= target < N
-
-        super().__init__(N, 0)
-        self.target = target
-
-    def as_operator(self):
-        return qutip.gate_expand_1toN(-qutip.qeye(2), self.N, self.target)
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        self.part.add_to_qiskit_circuit(circ, qreg)
 
 
 class QuantumCircuit:
@@ -128,9 +165,29 @@ class QuantumCircuit:
     def as_operator(self):
         if self.size > 0:
             matrices = [p.as_operator() for p in self._parts]
-            return functools.reduce(operator.mul, matrices)
+            return functools.reduce(operator.mul, reversed(matrices))
         else:
             return qutip.rx(0, N = self.N, target=0)
+
+    def as_qiskit_circuit(self, initial_state = None):
+        qubits = qk.QuantumRegister(self.N, 'q')
+        circ = qk.QuantumCircuit(qubits)
+
+        if initial_state is not None:
+            # State indices in Qutip and in Qiskit are based on different orders of qubits
+            circ.initialize(npq.reverse_qubits_in_state(initial_state), qubits)
+
+        for gate in self._parts:
+            gate.add_to_qiskit_circuit(circ, qubits)
+
+        return circ
+
+    def apply_to_state(self, initial_state):
+        circ = self.as_qiskit_circuit(initial_state)
+        backend_sim = qk.BasicAer.get_backend('statevector_simulator')
+        result = qk.execute(circ, backend_sim).result()
+        state = result.get_statevector(circ)
+        return npq.reverse_qubits_in_state(np.array(state))
 
     def store_parameters(self, arr: np.ndarray):
         assert arr.shape[0] == self.num_parameters
@@ -170,5 +227,5 @@ class QuantumCircuit:
 
     def clone(self):
         new_schema = QuantumCircuit(self.N)
-        new_schema._parts = list(self._parts)
+        new_schema._parts = copy.deepcopy(self._parts)
         return new_schema
