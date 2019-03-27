@@ -2,7 +2,7 @@ from quantum_circuit import RotX, RotY, RotZ, CNot, Static, QuantumCircuit, CNot
 import numpy as np
 
 
-def create_qaoa_circuit(N, p):
+def create_qaoa_circuit(N, initial_state, p):
     parts = []
 
     # X rotation
@@ -21,4 +21,4 @@ def create_qaoa_circuit(N, p):
         for i in range(0, N):
             parts.append(RotZ(N, i, 0))
 
-    return QuantumCircuit(N, parts)
+    return QuantumCircuit(N, initial_state, parts)

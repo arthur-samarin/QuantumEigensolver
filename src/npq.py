@@ -18,6 +18,14 @@ def zero_state(N: int):
     return np.array([1.0] + [0] * (2 ** N - 1), dtype=np.complex)
 
 
+def to_classic_state(wavefunction: np.ndarray):
+    N = N_from_state_vector(wavefunction)
+    for i in range(0, 2**N):
+        if np.abs(wavefunction[i]) == 1:
+            return i
+    raise ValueError("Wavefunction is not for classic state")
+
+
 # wavefunction'[i] = wavefunction[reverse(i)]
 # where reverse() is reverse of binary form
 def reverse_qubits_in_state(state):

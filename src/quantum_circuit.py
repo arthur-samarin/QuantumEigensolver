@@ -31,7 +31,7 @@ class CNotEntangle(QuantumCircuitPart):
         super().__init__(N, 0)
 
         cnots = [qutip.cnot(N, i, j) for i in range(0, N) for j in range(i + 1, N)]
-        self._operator = functools.reduce(operator.mul, cnots)
+        self._operator = functools.reduce(operator.mul, reversed(cnots))
 
     def as_operator(self):
         return self._operator
@@ -155,9 +155,10 @@ class Static(QuantumCircuitPart):
 
 
 class QuantumCircuit:
-    def __init__(self, N: int, parts = None):
+    def __init__(self, N: int, initial_classic_state: int = np.ndarray, parts = None):
         self._parts = parts or []
         self.N = N
+        self.initial_classic_state = initial_classic_state
 
         for part in self._parts:
             assert part.N == self.N
@@ -169,25 +170,30 @@ class QuantumCircuit:
         else:
             return qutip.rx(0, N = self.N, target=0)
 
-    def as_qiskit_circuit(self, initial_state = None):
+    def as_qiskit_circuit(self):
         qubits = qk.QuantumRegister(self.N, 'q')
         circ = qk.QuantumCircuit(qubits)
 
-        if initial_state is not None:
-            # State indices in Qutip and in Qiskit are based on different orders of qubits
-            circ.initialize(npq.reverse_qubits_in_state(initial_state), qubits)
+        if self.initial_classic_state is not None:
+            for i in range(0, self.N):
+                if (self.initial_classic_state >> i) & 1 != 0:
+                    circ.x(qubits[self.N - i - 1])
 
         for gate in self._parts:
             gate.add_to_qiskit_circuit(circ, qubits)
 
         return circ
 
-    def apply_to_state(self, initial_state):
-        circ = self.as_qiskit_circuit(initial_state)
-        backend_sim = qk.BasicAer.get_backend('statevector_simulator')
+    def run_qiskit_simulation(self, backend_type: str = 'statevector_simulator'):
+        circ = self.as_qiskit_circuit()
+        backend_sim = qk.BasicAer.get_backend(backend_type)
         result = qk.execute(circ, backend_sim).result()
-        state = result.get_statevector(circ)
-        return npq.reverse_qubits_in_state(np.array(state))
+
+        if backend_type == 'statevector_simulator':
+            state = result.get_statevector(circ)
+            return npq.reverse_qubits_in_state(np.array(state))
+        else:
+            return None
 
     def store_parameters(self, arr: np.ndarray):
         assert arr.shape[0] == self.num_parameters
@@ -226,6 +232,6 @@ class QuantumCircuit:
         self._parts.pop(index)
 
     def clone(self):
-        new_schema = QuantumCircuit(self.N)
+        new_schema = QuantumCircuit(self.N, self.initial_classic_state)
         new_schema._parts = copy.deepcopy(self._parts)
         return new_schema
