@@ -170,9 +170,14 @@ class QuantumCircuit:
         else:
             return qutip.rx(0, N = self.N, target=0)
 
-    def as_qiskit_circuit(self):
+    def as_qiskit_circuit(self, with_measurements=False):
         qubits = qk.QuantumRegister(self.N, 'q')
-        circ = qk.QuantumCircuit(qubits)
+
+        if with_measurements:
+            cbits = qk.ClassicalRegister(self.N, 'c')
+            circ = qk.QuantumCircuit(qubits, cbits)
+        else:
+            circ = qk.QuantumCircuit(qubits)
 
         if self.initial_classic_state is not None:
             for i in range(0, self.N):
@@ -182,18 +187,27 @@ class QuantumCircuit:
         for gate in self._parts:
             gate.add_to_qiskit_circuit(circ, qubits)
 
+        if with_measurements:
+            circ.measure(qubits, cbits)
+
         return circ
 
     def run_qiskit_simulation(self, backend_type: str = 'statevector_simulator'):
-        circ = self.as_qiskit_circuit()
         backend_sim = qk.BasicAer.get_backend(backend_type)
-        result = qk.execute(circ, backend_sim).result()
 
         if backend_type == 'statevector_simulator':
+            circ = self.as_qiskit_circuit(with_measurements=False)
+            result = qk.execute(circ, backend_sim).result()
             state = result.get_statevector(circ)
             return npq.reverse_qubits_in_state(np.array(state))
-        else:
+        elif backend_type == 'qasm_simulator':
+            circ = self.as_qiskit_circuit(with_measurements=True)
+            result = qk.execute(circ, backend_sim, shots=1).result()
+            # print(result.get_counts())
             return None
+        else:
+            raise ValueError("Bad simulation type: {}".format(backend_type))
+
 
     def store_parameters(self, arr: np.ndarray):
         assert arr.shape[0] == self.num_parameters

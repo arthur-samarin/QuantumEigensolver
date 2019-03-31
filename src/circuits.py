@@ -22,3 +22,11 @@ def create_qaoa_circuit(N, initial_state, p):
             parts.append(RotZ(N, i, 0))
 
     return QuantumCircuit(N, initial_state, parts)
+
+
+def create_random_circuit(N, num_mutations, seed, initial_state):
+    import mutations
+    circ = QuantumCircuit(N, initial_state)
+    for i in range(num_mutations):
+        mutations.random_mutation(circ)
+    return circ
