@@ -47,8 +47,8 @@ class MeasurementOp:
 
 
 if __name__ == '__main__':
-    N = 8
-    name = 'H_BeH2_N=8'
+    N = 4
+    name = 'H_LiH_N=4'
     op = MeasurementOp.from_file(N, 'input/{}.txt'.format(name))
     H = op.to_qobj()
     H2 = qio.qu_load(name)
