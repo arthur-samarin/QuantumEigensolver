@@ -11,11 +11,15 @@ from qutip import Qobj
 
 def classic_states(N: int):
     for i in range(0, N):
-        yield np.array([0] * i + [1.0] + [0] * (2 ** N - i - 1), dtype=np.complex)
+        yield classical_state(N, i)
+
+
+def classical_state(N: int, index: int):
+    return np.array([0.0] * index + [1.0] + [0.0] * (2 ** N - index - 1), dtype=np.complex)
 
 
 def zero_state(N: int):
-    return np.array([1.0] + [0] * (2 ** N - 1), dtype=np.complex)
+    return classical_state(N, 0)
 
 
 def to_classic_state(wavefunction: np.ndarray):
@@ -51,12 +55,24 @@ def np_to_ket(arr: np.ndarray) -> Qobj:
     return Qobj(np.row_stack(arr), dims=[[2] * N, [1] * N])
 
 
-def N_from_state_vector(arr):
-    M, = arr.shape
+def int_log2(M):
     N = M.bit_length() - 1
     if 2 ** N != M:
-        raise ValueError("Bad array size: {}, must me a power of 2.".format(M))
+        raise ValueError("Bad size: {}, must me a power of 2.".format(M))
     return N
+
+
+def N_from_state_vector(arr):
+    M, = arr.shape
+    return int_log2(M)
+
+
+def N_from_qobj(obj):
+    if obj.isoper:
+        M, _ = obj.shape
+        return int_log2(M)
+    else:
+        raise ValueError('Unsupported Qobj type for N_from_qobj')
 
 
 def qobj_to_np(obj: Qobj) -> np.ndarray:

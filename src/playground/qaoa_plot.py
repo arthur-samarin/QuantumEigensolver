@@ -2,7 +2,7 @@ import circuits
 import npq
 import numpy as np
 import scipy as sc
-from qio import qu_load
+from iohelper.qio import qu_load
 from qutip import *
 from quantum_circuit import QuantumCircuit
 
@@ -34,11 +34,13 @@ def score_circuit(schema: QuantumCircuit):
         return E_to_min(np.zeros(0))
 
     parameters = np.random.uniform(0.0, 2 * np.pi, schema.num_parameters)
-    [xopt, fopt, gopt, Bopt, func_calls, grad_calls, warnflg] = sc.optimize.fmin_bfgs(E_to_min, parameters, full_output=True, disp=False)
-    return fopt
+    res = sc.optimize.minimize(E_to_min, parameters, method='nelder-mead', options={'xtol': 1e-4, 'disp': True})
+    return res.fun
+    # [xopt, fopt, gopt, Bopt, func_calls, grad_calls, warnflg] = sc.optimize.fmin_bfgs(E_to_min, parameters, maxiter=10, full_output=True, disp=True)
+    # return fopt
 
 
-for i in range(0, 6):
+for i in range(5, 10):
     for j in range(0, 4):
         circuit = circuits.create_qaoa_circuit(N, classicPsi, i)
         print(i, score_circuit(circuit))

@@ -1,9 +1,7 @@
-from qio import qu_load
+from iohelper.qio import qu_load
 from qutip import tensor, basis
 from circuits import create_qaoa_circuit, create_random_circuit
 import npq
-import qiskit as qk
-import timeit
 
 from quantum_circuit import QuantumCircuit
 

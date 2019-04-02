@@ -15,3 +15,8 @@ def qu_load(name: str) -> Qobj:
         bytes = bytes.replace(b'\r\n', b'\n')
 
     return pickle.loads(bytes, encoding='latin1')
+
+
+def qu_save(name: str, obj: Qobj):
+    with open(os.path.join('output', name + '.qu'), 'wb') as f:
+        pickle.dump(obj, f)

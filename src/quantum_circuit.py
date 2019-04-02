@@ -25,6 +25,9 @@ class QuantumCircuitPart:
     def store_parameters(self, arr, index: int):
         pass
 
+    def reset_parameters(self):
+        pass
+
 
 class CNotEntangle(QuantumCircuitPart):
     def __init__(self, N: int):
@@ -142,6 +145,57 @@ class RotZ(QuantumCircuitPart):
         arr[index] = self.angle
 
 
+class Block(QuantumCircuitPart):
+    def __init__(self, N: int, control: int, target: int, typ: str = 'cnot'):
+        QuantumCircuitPart.__init__(self, N, 8)
+        self.typ = typ
+        self.angles = np.zeros(8, dtype=np.double)
+        self.control = control
+        self.target = target
+
+    def as_operator(self):
+        N = self.N
+        control_pre = qutip.gate_expand_1toN(qutip.phasegate(self.angles[1]) * qutip.rx(self.angles[0]), N, self.control)
+        control_post = qutip.gate_expand_1toN(qutip.phasegate(self.angles[3]) * qutip.rx(self.angles[2]), N, self.control)
+        target_pre = qutip.gate_expand_1toN(qutip.phasegate(self.angles[5]) * qutip.rx(self.angles[4]), N, self.target)
+        target_post = qutip.gate_expand_1toN(qutip.phasegate(self.angles[7]) * qutip.rx(self.angles[6]), N, self.target)
+        if self.typ == 'sqrtswap':
+            block_op = qutip.sqrtswap(N, targets=[self.control, self.target])
+        elif self.typ == 'swap':
+            block_op = qutip.swap(N, targets=[self.control, self.target])
+        elif self.typ == 'cnot':
+            block_op = qutip.cnot(N, control=self.control, target=self.target)
+
+        return control_post * target_post * block_op * control_pre * target_pre
+
+    def add_to_qiskit_circuit(self, circ: qk.QuantumCircuit, qreg: QuantumRegister):
+        circ.rx(self.angles[0], qreg[self.control])
+        circ.rz(self.angles[1], qreg[self.control])
+        circ.rx(self.angles[2], qreg[self.target])
+        circ.rz(self.angles[3], qreg[self.target])
+        if self.typ == 'sqrtswap':
+            qutip.cx(qreg[self.control], qreg[self.target])
+        elif self.typ == 'swap':
+            circ.swap(qreg[self.control], qreg[self.target])
+        elif self.typ == 'cnot':
+            circ.cx(qreg[self.control], qreg[self.target])
+        circ.rx(self.angles[4], qreg[self.control])
+        circ.rz(self.angles[5], qreg[self.control])
+        circ.rx(self.angles[6], qreg[self.target])
+        circ.rz(self.angles[7], qreg[self.target])
+
+    def load_parameters(self, arr, index: int):
+        for i in range(0, 8):
+            self.angles[i] = arr[index + i]
+
+    def store_parameters(self, arr, index: int):
+        for i in range(0, 8):
+            arr[index + i] = self.angles[i]
+
+    def reset_parameters(self):
+        pass
+
+
 class Static(QuantumCircuitPart):
     def __init__(self, part: QuantumCircuitPart):
         super().__init__(part.N, 0)
@@ -155,7 +209,7 @@ class Static(QuantumCircuitPart):
 
 
 class QuantumCircuit:
-    def __init__(self, N: int, initial_classic_state: int = np.ndarray, parts = None):
+    def __init__(self, N: int, initial_classic_state: int = 0, parts = None):
         self._parts = parts or []
         self.N = N
         self.initial_classic_state = initial_classic_state
@@ -224,6 +278,10 @@ class QuantumCircuit:
         for p in self._parts:
             p.load_parameters(arr, i)
             i += p.num_params
+
+    def reset_parameters(self):
+        for part in self._parts:
+            part.reset_parameters()
 
     @property
     def num_parameters(self):

@@ -1,4 +1,4 @@
-from quantum_circuit import QuantumCircuit, CNot, RotX, RotZ, QuantumCircuitPart
+from quantum_circuit import QuantumCircuit, CNot, RotX, RotZ, QuantumCircuitPart, Block
 from random import randint, choice
 
 
@@ -15,6 +15,16 @@ def insert_random_cnot(schema: QuantumCircuit):
             break
 
     insert_into_random_place(schema, CNot(schema.N, control, target))
+
+
+def insert_random_block(schema: QuantumCircuit):
+    control = randint(0, schema.N - 1)
+    while True:
+        target = randint(0, schema.N - 1)
+        if target != control:
+            break
+
+    insert_into_random_place(schema, Block(schema.N, control, target))
 
 
 def insert_random_rx(schema: QuantumCircuit):
@@ -37,3 +47,17 @@ def random_mutation(schema: QuantumCircuit):
     mutators = [insert_random_cnot, insert_random_rx, insert_random_rz, delete_random_element]
     mutator = choice(mutators)
     mutator(schema)
+
+
+def random_block_mutation(schema: QuantumCircuit):
+    mutators = [insert_random_block, delete_random_element]
+    mutator = choice(mutators)
+    mutator(schema)
+
+
+def add_two_block_layers(circuit: QuantumCircuit):
+    for i in range(0, circuit.N - 1, 2):
+        circuit.insert(circuit.size, Block(circuit.N, i, i + 1))
+    for i in range(1, circuit.N - 1, 2):
+        circuit.insert(circuit.size, Block(circuit.N, i, i + 1))
+
