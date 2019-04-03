@@ -14,8 +14,6 @@ class Hamiltonian:
         self.classical_psi0 = min(range(2**self.N), key=lambda i: expected_value(self.npH, classical_state(self.N, i)))
         self.classical_psi0_bitstring = ('{:0' + str(self.N) + 'b}').format(self.classical_psi0)
 
-        print(self.N, np.max(np.abs(self.npH - self.npH.transpose().conj())))
-
     @staticmethod
     def from_file(name):
         return Hamiltonian(qu_load(name))

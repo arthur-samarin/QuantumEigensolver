@@ -4,3 +4,5 @@ cython
 matplotlib
 qutip
 qiskit
+pandas
+cma
