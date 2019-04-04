@@ -1,63 +1,38 @@
-from quantum_circuit import QuantumCircuit, CNot, RotX, RotZ, QuantumCircuitPart, Block
-from random import randint, choice
+from circuit import QCircuit, GateInstance, GateType, GateTypes
+from random import randint, choice, sample
 
 
-def insert_into_random_place(schema: QuantumCircuit, gate: QuantumCircuitPart):
-    index = randint(0, schema.size)
-    schema.insert(index, gate)
+def insert_gate_into_random_place(circ: QCircuit, gate: GateInstance):
+    index = randint(0, circ.size)
+    circ.insert(index, gate)
 
 
-def insert_random_cnot(schema: QuantumCircuit):
-    control = randint(0, schema.N - 1)
-    while True:
-        target = randint(0, schema.N - 1)
-        if target != control:
-            break
-
-    insert_into_random_place(schema, CNot(schema.N, control, target))
+def insert_gate_type_into_random_place(gate_type: GateType):
+    def mutator(circ: QCircuit):
+        targets = sample(range(circ.num_qubits), gate_type.num_qubits)
+        insert_gate_into_random_place(circ, GateInstance(gate_type, targets))
+    return mutator
 
 
-def insert_random_block(schema: QuantumCircuit):
-    control = randint(0, schema.N - 1)
-    while True:
-        target = randint(0, schema.N - 1)
-        if target != control:
-            break
-
-    insert_into_random_place(schema, Block(schema.N, control, target))
+def delete_random_element(circ: QCircuit):
+    if circ.size > 0:
+        index = randint(0, circ.size - 1)
+        circ.remove_at(index)
 
 
-def insert_random_rx(schema: QuantumCircuit):
-    target = randint(0, schema.N - 1)
-    insert_into_random_place(schema, RotX(schema.N, target, 0))
-
-
-def insert_random_rz(schema: QuantumCircuit):
-    target = randint(0, schema.N - 1)
-    insert_into_random_place(schema, RotZ(schema.N, target, 0))
-
-
-def delete_random_element(schema: QuantumCircuit):
-    if schema.size > 0:
-        index = randint(0, schema.size - 1)
-        schema.remove_at(index)
-
-
-def random_mutation(schema: QuantumCircuit):
-    mutators = [insert_random_cnot, insert_random_rx, insert_random_rz, delete_random_element]
+def random_block_mutation(circ: QCircuit):
+    mutators = [
+        insert_gate_type_into_random_place(GateTypes.block_cnot),
+        insert_gate_type_into_random_place(GateTypes.block_sqrtswap),
+        delete_random_element
+    ]
     mutator = choice(mutators)
-    mutator(schema)
+    mutator(circ)
 
 
-def random_block_mutation(schema: QuantumCircuit):
-    mutators = [insert_random_block, delete_random_element]
-    mutator = choice(mutators)
-    mutator(schema)
-
-
-def add_two_block_layers(circuit: QuantumCircuit):
-    for i in range(0, circuit.N - 1, 2):
-        circuit.insert(circuit.size, Block(circuit.N, i, i + 1))
-    for i in range(1, circuit.N - 1, 2):
-        circuit.insert(circuit.size, Block(circuit.N, i, i + 1))
-
+def add_two_block_layers(circ: QCircuit, block_type: GateType):
+    num_qubits = circ.num_qubits
+    for i in range(0, num_qubits - 1, 2):
+        circ.insert(circ.size, GateInstance(block_type, [i, i + 1]))
+    for i in range(1, circ.num_qubits - 1, 2):
+        circ.insert(circ.size, GateInstance(block_type, [i, i + 1]))

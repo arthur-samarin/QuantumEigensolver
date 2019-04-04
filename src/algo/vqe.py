@@ -1,35 +1,37 @@
-from qutip import Qobj, expect
-from npq import classical_state, N_from_qobj, np_to_ket
-from quantum_circuit import QuantumCircuit
 import numpy as np
-import scipy as sc
+from qutip import Qobj, expect
+
+from algo.func_optimizer import Optimizer, OptimizationResult
+from circuit import QCircuit, QCircuitConversions
+from npq import N_from_qobj
+
+
+class VqeResult:
+    def __init__(self, circ: QCircuit, opt_parameters: np.ndarray, opt_value: float):
+        self.circ = circ
+        self.opt_parameters = opt_parameters
+        self.opt_value = opt_value
 
 
 class Vqe:
-    def __init__(self, hamiltonian: Qobj):
+    def __init__(self, optimizer: Optimizer, hamiltonian: Qobj):
         self.N = N_from_qobj(hamiltonian)
         self.H = hamiltonian
-        self.num_circuit_evaluations = 0
-        self.num_optimizations = 0
+        self.optimizer = optimizer
 
-    def optimize(self, circuit: QuantumCircuit):
+    def optimize(self, circ: QCircuit):
         def e_to_min(params):
-            self.num_circuit_evaluations += 1
-            circuit.load_parameters(params)
-            op = circuit.as_operator()
-            phi = op * np_to_ket(classical_state(self.N, circuit.initial_classic_state))
-            e = expect(self.H, phi)
+            circ.set_parameters(params)
+            wavefunc = QCircuitConversions.to_qobj_wavefunction(circ)
+            e = expect(self.H, wavefunc)
             return e
 
-        self.num_optimizations += 1
-        if circuit.num_parameters == 0:
+        if circ.num_parameters == 0:
             # Don't run optimizations for schemas without parameters because it crashes some methods
-            return e_to_min(np.zeros(0))
+            p = np.zeros(0)
+            return VqeResult(circ, p, e_to_min(p))
 
-        parameters = np.random.uniform(0.0, 2 * np.pi, circuit.num_parameters)
-        [xopt, fopt, gopt, Bopt, func_calls, grad_calls, warnflg] = sc.optimize.fmin_bfgs(e_to_min, parameters,
-                                                                                          full_output=True,
-                                                                                          disp=False)
+        parameters = np.random.uniform(0.0, np.pi, circ.num_parameters)
 
-        circuit.load_parameters(xopt)
-        return fopt
+        result: OptimizationResult = self.optimizer.optimize(e_to_min, parameters, circ.parameters_bounds)
+        return VqeResult(circ, result.x_opt, result.f_opt)
