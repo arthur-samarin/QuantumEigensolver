@@ -20,7 +20,7 @@ print('Initial state is {}'.format(task.classical_psi0_bitstring))
 
 # Initialize circuit with something random
 circuit = QCircuit(task.N, task.classical_psi0, [])
-mutations.add_two_block_layers(circuit, GateTypes.block_cnot)
+# mutations.add_two_block_layers(circuit, GateTypes.block_cnot)
 
 
 def on_iteration_end(report: IterationReport):
@@ -36,13 +36,12 @@ ev = OnePlusLambda(
     target=task.min_eigenvalue,
     vqe=Vqe(hamiltonian=task.H, optimizer=CmaesOptimizer(0.0016)),
     mutation=Weighted([
-        (Insert(GateTypes.block_cnot), 1),
-        (Insert(GateTypes.block_sqrtswap), 1),
+        (Insert(GateTypes.block_b), 1),
         (Remove(), 1)
     ]),
     initial=circuit,
     target_eps=0.0016,
-    alambda=1
+    alambda=4
 )
 report: EvolutionReport = ev.run(iteration_end_callback=on_iteration_end)
 

@@ -9,7 +9,7 @@ import numpy as np
 
 class RxGateType(GateType):
     def __init__(self, name):
-        super().__init__(name, 1, 1, [(0, np.pi)])
+        super().__init__(name, 1, 1, [(-np.pi, np.pi)])
 
     def as_qobj_operator(self, instance: "GateInstance") -> qutip.Qobj:
         return qutip.rx(instance.params[0])
@@ -18,9 +18,20 @@ class RxGateType(GateType):
         circ.rx(instance.params[0], reg[instance.qubits[0]])
 
 
+class RyGateType(GateType):
+    def __init__(self, name):
+        super().__init__(name, 1, 1, [(-np.pi, np.pi)])
+
+    def as_qobj_operator(self, instance: "GateInstance") -> qutip.Qobj:
+        return qutip.ry(instance.params[0])
+
+    def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
+        circ.ry(instance.params[0], reg[instance.qubits[0]])
+
+
 class RzGateType(GateType):
     def __init__(self, name):
-        super().__init__(name, 1, 1, [(0, np.pi)])
+        super().__init__(name, 1, 1, [(-np.pi, np.pi)])
 
     def as_qobj_operator(self, instance: "GateInstance") -> qutip.Qobj:
         return qutip.phasegate(instance.params[0])
@@ -52,27 +63,32 @@ class SqrtswapGateType(GateType):
 
 
 class CombinedGateType(GateType):
-    def __init__(self, name, num_qubits, gate_placements: List[Tuple[GateType, List[int]]]):
-        num_params = sum(map(lambda g: g[0].num_params, gate_placements))
-        param_ranges = [bounds for gate_type, targets in gate_placements for bounds in gate_type.param_ranges]
+    def __init__(self, name, num_qubits, gate_placements: List[Tuple[GateType, List[int]]], num_params=None, param_ranges=None):
+        num_params = num_params or sum(map(lambda g: g[0].num_params, gate_placements))
+        param_ranges = param_ranges or [bounds for gate_type, targets in gate_placements for bounds in gate_type.param_ranges]
 
         super().__init__(name, num_qubits, num_params, param_ranges)
         self.gate_placements = gate_placements
 
+    def decompose_params(self, p: np.ndarray):
+        return p
+
     def as_qobj_operator(self, instance: "GateInstance") -> qutip.Qobj:
+        p = self.decompose_params(instance.params)
         op = qutip.rx(0, self.num_qubits, 0)
         i = 0
         for gate_type, targets in self.gate_placements:
-            fake_instance = GateInstance(gate_type, targets, instance.params[i:i + gate_type.num_params])
+            fake_instance = GateInstance(gate_type, targets, p[i:i + gate_type.num_params])
             op = self._expand_gate(gate_type.as_qobj_operator(fake_instance), gate_type.num_qubits, self.num_qubits, targets) * op
             i += gate_type.num_params
         return op
 
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
+        p = self.decompose_params(instance.params)
         regs = [reg[q] for q in instance.qubits]
         i = 0
         for gate_type, targets in self.gate_placements:
-            fake_instance = GateInstance(gate_type, targets, instance.params[i:i + gate_type.num_params])
+            fake_instance = GateInstance(gate_type, targets, p[i:i + gate_type.num_params])
             gate_type.to_qiskit_circuit(fake_instance, circ, regs)
             i += gate_type.num_params
 
@@ -104,22 +120,75 @@ class BlockGateType(CombinedGateType):
         self.block_type = block_type
 
 
-class GateTypes:
-    rx = RxGateType('rx')
-    rz = RzGateType('rz')
-    cnot = CNotGateType('cnot')
-    sqrtswap = SqrtswapGateType('sqrtswap')
-    block_cnot = BlockGateType('block-cnot', rx, rz, cnot)
-    block_sqrtswap = BlockGateType('block-sqrtswap', rx, rz, sqrtswap)
-    all = [
-        rx,
-        rz,
-        cnot,
-        sqrtswap,
-        block_cnot,
-        block_sqrtswap
-    ]
+class BlockAGateType(CombinedGateType):
+    def __init__(self, name):
+        super().__init__(name, 2, [
+            (GateTypes.rz, [0]),
+            (GateTypes.ry, [0]),
+            (GateTypes.rx, [1]),
+            (GateTypes.ry, [1]),
+            (GateTypes.cnot, [0, 1]),
+            (GateTypes.ry, [0]),
+            (GateTypes.rz, [0]),
+            (GateTypes.ry, [1]),
+            (GateTypes.rx, [1])
+        ], num_params=4, param_ranges=[(-np.pi, np.pi) for _ in range(4)])
 
+    def decompose_params(self, p: np.ndarray):
+        return np.array([p[0], p[1], p[2], p[3], -p[1], -p[0], -p[3], -p[2]])
+
+
+class BlockBGateType(CombinedGateType):
+    def __init__(self, name):
+        super().__init__(name, 2, [
+            (GateTypes.rz, [0]),
+            (GateTypes.ry, [0]),
+            (GateTypes.rz, [1]),
+            (GateTypes.ry, [1]),
+            (GateTypes.cnot, [0, 1]),
+            (GateTypes.ry, [1]),
+            (GateTypes.rz, [1]),
+            (GateTypes.cnot, [0, 1]),
+            (GateTypes.ry, [0]),
+            (GateTypes.rz, [0]),
+            (GateTypes.rz, [1])
+        ], num_params=5, param_ranges=[(-np.pi, np.pi) for _ in range(5)])
+
+    def decompose_params(self, p: np.ndarray):
+        return np.array([p[0], p[1], p[2], p[3], -p[3], (-p[4] - p[2])/2, -p[1], -p[0], (p[4] - p[2])/2])
+
+    def reset_parameters(self, instance: "GateInstance"):
+        instance.params = np.random.uniform(-np.pi, np.pi, 5)
+        instance.params[3] = np.pi
+        instance.params[4] = 2*np.pi - instance.params[2]
+        if instance.params[4] > np.pi:
+            instance.params[4] -= 2*np.pi
+
+
+class GateTypes:
     @staticmethod
     def by_name(name: str) -> GateType:
         return next(filter(lambda t: t.name == name, GateTypes.all))
+
+
+GateTypes.rx = RxGateType('rx')
+GateTypes.ry = RyGateType('ry')
+GateTypes.rz = RzGateType('rz')
+GateTypes.cnot = CNotGateType('cnot')
+GateTypes.sqrtswap = SqrtswapGateType('sqrtswap')
+GateTypes.block_cnot = BlockGateType('block-cnot', GateTypes.rx, GateTypes.rz, GateTypes.cnot)
+GateTypes.block_sqrtswap = BlockGateType('block-sqrtswap', GateTypes.rx, GateTypes.rz, GateTypes.sqrtswap)
+GateTypes.block_a = BlockAGateType('block-a')
+GateTypes.block_b = BlockBGateType('block-b')
+
+GateTypes.all = [
+    GateTypes.rx,
+    GateTypes.ry,
+    GateTypes.rz,
+    GateTypes.cnot,
+    GateTypes.sqrtswap,
+    GateTypes.block_cnot,
+    GateTypes.block_sqrtswap,
+    GateTypes.block_a,
+    GateTypes.block_b
+]

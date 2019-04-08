@@ -28,6 +28,18 @@ class QCircuit:
             gate.params[:] = arr[i:i+gate.typ.num_params]
             i += gate.typ.num_params
 
+    def get_parameters(self) -> np.ndarray:
+        p = np.zeros(self.num_parameters)
+        i = 0
+        for gate in self.gates:
+            p[i:i + gate.typ.num_params] = gate.params
+            i += gate.typ.num_params
+        return p
+
+    def reset_parameters(self) -> None:
+        for gate in self.gates:
+            gate.reset_parameters()
+
     @property
     def parameters_bounds(self):
         bounds = []
@@ -68,6 +80,9 @@ class GateType:
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
         raise NotImplemented()
 
+    def reset_parameters(self, instance: "GateInstance"):
+        instance.params = np.array([np.random.uniform(bottom, top) for bottom, top in self.param_ranges])
+
 
 class GateInstance:
     def __init__(self, typ: GateType, qubits: List[int], params: Union[np.ndarray, List[float]] = None):
@@ -89,6 +104,9 @@ class GateInstance:
 
     def as_large_qobj_operator(self, num_qubits: int) -> qutip.Qobj:
         return qutip.gate_expand_2toN(self.as_qobj_operator(), num_qubits, targets=self.qubits)
+
+    def reset_parameters(self):
+        self.typ.reset_parameters(self)
 
     def clone(self) -> "GateInstance":
         return GateInstance(self.typ, self.qubits, self.params)

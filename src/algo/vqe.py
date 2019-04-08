@@ -37,7 +37,8 @@ class Vqe:
             p = np.zeros(0)
             return VqeResult(circ, p, e_to_min(p), self._num_evaluations)
 
-        parameters = np.random.uniform(0.0, np.pi, circ.num_parameters)
+        circ.reset_parameters()
+        parameters = circ.get_parameters()
 
         result: OptimizationResult = self.optimizer.optimize(e_to_min, parameters, circ.parameters_bounds)
         return VqeResult(circ, result.x_opt, result.f_opt, self._num_evaluations)
