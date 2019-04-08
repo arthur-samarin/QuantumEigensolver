@@ -23,3 +23,7 @@ q2 = Hamiltonian.from_file('H_H2_N=2')
 q4 = Hamiltonian.from_file('H_LiH_N=4')
 q8 = Hamiltonian.from_file('H_BeH2_N=8')
 q10 = Hamiltonian.from_file('H_BeH2_N=10')
+
+
+def h2(r):
+    return Hamiltonian.from_file('h2/H_H2_N=4_R={}'.format(r))

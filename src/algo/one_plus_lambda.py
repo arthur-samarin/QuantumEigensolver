@@ -1,64 +1,112 @@
+import time
 from multiprocessing import Pool
-from typing import Optional
+from typing import Optional, List, Callable
 
 from algo.vqe import Vqe, VqeResult
 from circuit import QCircuit
+from mutations import Mutation
+
+
+class MutationReport:
+    def __init__(self, circ: QCircuit, value: float, num_circ_evaluations: int, vqe_time: float):
+        self.circ = circ
+        self.value = value
+        self.num_circ_evaluations = num_circ_evaluations
+        self.vqe_time = vqe_time
+        self.circuit_size = circ.size
+
+
+class IterationReport:
+    def __init__(self, index: int, better: bool, mutations: List[MutationReport], time: float):
+        self.index = index
+        self.better = better
+        self.mutations = mutations
+        self.time = time
+
+
+class EvolutionReport:
+    def __init__(self, iterations: List[IterationReport], best_iteration_index: int, interrupted: bool = False):
+        self.iterations = iterations
+        self.best_iteration_index = best_iteration_index
+        self.interrupted = interrupted
+
+    @property
+    def best_circuit(self):
+        return self.iterations[self.best_iteration_index].mutations[0].circ
+
+    @property
+    def best_circuit_value(self):
+        return self.iterations[self.best_iteration_index].mutations[0].value
 
 
 class OnePlusLambda:
-    def __init__(self, target: float, vqe: Vqe, mutate, initial: QCircuit, target_eps=0.0016, alambda: int = 8):
+    def __init__(self, target: float, vqe: Vqe, mutation: Mutation, initial: QCircuit, target_eps=0.0016, alambda: int = 8):
         self.initial = initial
         self.vqe = vqe
-        self.mutate = mutate
+        self.mutation = mutation
         self.target = target
         self.target_eps = target_eps
         self.alambda = alambda
         self.num_iterations = 0
+        self.best_result: Optional[MutationReport] = None
 
-        self.best_result: Optional[VqeResult] = None
+    def run(self, iteration_end_callback: Callable[[IterationReport], None] = None) -> EvolutionReport:
+        iterations = []
+        best_iteration_index = 0
+        interrupted = False
+        iteration_start_time = time.time()
 
-    def run(self):
-        with Pool(initializer=OnePlusLambda._initialize_subprocess, initargs=(self.vqe, )) as p:
-            self.best_result = self.vqe.optimize(self.initial)
-            print('Initial value: {}'.format(self.best_result.opt_value))
+        with Pool(initializer=OnePlusLambda._initialize_subprocess, initargs=(self.vqe,)) as p:
+            self.best_result = p.apply(self._evaluate_mutation, [self.initial])
+            print('Initial value: {}'.format(self.best_result.value))
+            iterations.append(IterationReport(0, True, [self.best_result], time.time() - iteration_start_time))
 
             num_iterations_without_progress = 0
             self.num_iterations = 0
             try:
-                while self.best_result.opt_value > self.target + self.target_eps:
-                    # Display iteration number
-                    print('Iteration #{}...'.format(self.num_iterations + 1))
+                while self.best_result.value > self.target + self.target_eps:
+                    iteration_start_time = time.time()
 
                     # Mutate
                     mutated_circuits = []
                     for _ in range(self.alambda):
                         circuit_clone = self.best_result.circ.clone()
-                        self.mutate(circuit_clone)
+                        self.mutation.apply(circuit_clone)
                         if num_iterations_without_progress >= 10:
                             # Try to do more complex mutations
                             for j in range(0, num_iterations_without_progress // 2):
-                                self.mutate(circuit_clone)
+                                self.mutation.apply(circuit_clone)
                         mutated_circuits.append(circuit_clone)
 
                     # Evaluate
-                    evaluation_results = list(p.imap_unordered(OnePlusLambda._evaluate_in_subprocess, mutated_circuits))
-                    new_result: VqeResult = min(evaluation_results, key=lambda r: r.opt_value)
+                    mutation_reports = list(p.imap_unordered(OnePlusLambda._evaluate_mutation, mutated_circuits))
+                    mutation_reports.sort(key=lambda r: r.value)
+                    new_result: MutationReport = mutation_reports[0]
 
                     # Increment iteration number
                     self.num_iterations += 1
 
+                    # Check if better
+                    is_better = new_result.value < self.best_result.value
+                    iteration_report = IterationReport(self.num_iterations, is_better, mutation_reports,
+                                                       time.time() - iteration_start_time)
+                    iterations.append(iteration_report)
+
                     # Choose best
-                    if new_result.opt_value < self.best_result.opt_value:
-                        print('New value: {} at iteration {}'.format(new_result.opt_value, self.num_iterations))
+                    if is_better:
                         self.best_result = new_result
-                        self.best_result.circ.set_parameters(new_result.opt_parameters)
+                        best_iteration_index = self.num_iterations
 
                         num_iterations_without_progress = 0
                     else:
                         num_iterations_without_progress += 1
 
+                    if iteration_end_callback is not None:
+                        iteration_end_callback(iteration_report)
             except KeyboardInterrupt:
-                print("INTERRUPTED")
+                interrupted = True
+
+        return EvolutionReport(iterations, best_iteration_index, interrupted=interrupted)
 
     """Local to subprocess"""
     _vqe = None
@@ -75,5 +123,9 @@ class OnePlusLambda:
         OnePlusLambda._vqe = vqe
 
     @staticmethod
-    def _evaluate_in_subprocess(circuit: QCircuit):
-        return OnePlusLambda._vqe.optimize(circuit)
+    def _evaluate_mutation(circuit: QCircuit) -> MutationReport:
+        import time
+        start_time = time.time()
+        vqe_result = OnePlusLambda._vqe.optimize(circuit)
+        circuit.set_parameters(vqe_result.opt_parameters)
+        return MutationReport(circuit, vqe_result.opt_value, vqe_result.num_evaluations, time.time() - start_time)
