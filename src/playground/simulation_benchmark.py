@@ -1,30 +1,33 @@
-from iohelper.qio import qu_load
-from qutip import tensor, basis
-from circuits import create_qaoa_circuit, create_random_circuit
+from circuit import QCircuit, QCircuitConversions, GateTypes
+import qiskit as qk
+import mutations
+import random
 import npq
-
-from quantum_circuit import QuantumCircuit
-
-N = 8
-H = qu_load('H_BeH2_N=8')
-H.isherm = True
-psi0 = tensor(basis(2, 1), basis(2, 1), basis(2, 0), basis(2, 0), basis(2, 0), basis(2, 0), basis(2, 0),
-              basis(2, 0)).unit()
-
-npH = H.full()
-npPsi0 = psi0.full().flatten()
-classicPsi0 = npq.to_classic_state(npPsi0)
+import numpy as np
 
 
-def benchmark_circuit(name, circuit: QuantumCircuit):
+def benchmark_circuit(name, circ: QCircuit):
+    qk_circuit = QCircuitConversions.to_qiskit_circuit(circ)
+    qk_backend = qk.BasicAer.get_backend('statevector_simulator')
+
     def compute_via_qutip():
-        circuit.as_operator() * psi0
+        wavefunc = npq.np_to_ket(npq.classical_state(circ.num_qubits, circ.initial_classical_state))
+        for gate in circ.gates:
+            op = gate.as_large_qobj_operator(circ.num_qubits)
+            wavefunc = op * wavefunc
+        return wavefunc
 
-    def run_statevector_simulation():
-        circuit.run_qiskit_simulation()
+    def compute_via_qiskit():
+        result = qk.execute(qk_circuit, qk_backend).result()
+        state = result.get_statevector(qk_circuit)
+        return npq.reverse_qubits_in_state(np.array(state))
 
-    def run_qasm_simulation():
-        circuit.run_qiskit_simulation(backend_type='qasm_simulator')
+    def check_equality():
+        q1 = npq.qobj_to_np(compute_via_qutip())
+        q2 = compute_via_qiskit()
+        assert np.allclose(q1, q2)
+
+    check_equality()
 
     def benchmark(name, func, max_n=100, max_time=3.0):
         import time
@@ -36,16 +39,32 @@ def benchmark_circuit(name, circuit: QuantumCircuit):
             n += 1
             cur_time = time.time()
         time_elapsed = cur_time - start_time
-        print("  {}\t{:.1f} ops".format(name, n / time_elapsed))
+        print("  {}\t{:.3f} ops".format(name, n / time_elapsed))
 
-    # print(circuit.as_qiskit_circuit().draw(line_length=240))
+    print(qk_circuit.draw(line_length=240))
     print(name)
     benchmark('Qutip', compute_via_qutip)
-    benchmark('Qiskit (statevector)', run_statevector_simulation)
-    benchmark('Qiskit (QASM)', run_qasm_simulation)
+    benchmark('Qiskit (statevector)', compute_via_qiskit)
 
 
-benchmark_circuit('QAOA (1)', create_qaoa_circuit(N, classicPsi0, 1))
-benchmark_circuit('QAOA (3)', create_qaoa_circuit(N, classicPsi0, 3))
-benchmark_circuit('QAOA (5)', create_qaoa_circuit(N, classicPsi0, 5))
-benchmark_circuit('Random', create_random_circuit(N, 20, 42, classicPsi0))
+def create_random_circuit(num_qubits: int, num_rotations: int, num_cnots: int):
+    circ = QCircuit(num_qubits, 0, [])
+    for _ in range(num_rotations):
+        gate_type = random.choice([GateTypes.rx, GateTypes.ry, GateTypes.rz])
+        mutations.Insert(gate_type).apply(circ)
+    for _ in range(num_cnots):
+        gate_type = random.choice([GateTypes.cnot])
+        mutations.Insert(gate_type).apply(circ)
+    return circ
+
+
+def main():
+    num_qubits = 4
+    size = 20
+    num_rotations = size * 3 // 4
+    num_cnots = size // 4
+    benchmark_circuit('Random (size={})'.format(size), create_random_circuit(num_qubits, num_rotations, num_cnots))
+
+
+if __name__ == '__main__':
+    main()

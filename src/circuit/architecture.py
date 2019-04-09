@@ -103,7 +103,12 @@ class GateInstance:
         return self.typ.as_qobj_operator(self)
 
     def as_large_qobj_operator(self, num_qubits: int) -> qutip.Qobj:
-        return qutip.gate_expand_2toN(self.as_qobj_operator(), num_qubits, targets=self.qubits)
+        if self.typ.num_qubits == 2:
+            return qutip.gate_expand_2toN(self.as_qobj_operator(), num_qubits, targets=self.qubits)
+        elif self.typ.num_qubits == 1:
+            return qutip.gate_expand_1toN(self.as_qobj_operator(), num_qubits, self.qubits[0])
+        else:
+            raise NotImplemented('Not implemented for large gates')
 
     def reset_parameters(self):
         self.typ.reset_parameters(self)
