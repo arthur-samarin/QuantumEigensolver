@@ -27,3 +27,15 @@ q10 = Hamiltonian.from_file('H_BeH2_N=10')
 
 def h2(r):
     return Hamiltonian.from_file('h2/H_H2_N=4_R={}'.format(r))
+
+
+def for_qubits(num_qubits: int):
+    if num_qubits == 2:
+        return q2
+    elif num_qubits == 4:
+        return q4
+    elif num_qubits == 8:
+        return q8
+    elif num_qubits == 10:
+        return q10
+    return None

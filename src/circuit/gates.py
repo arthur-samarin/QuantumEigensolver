@@ -6,6 +6,8 @@ from circuit.architecture import GateType, GateInstance
 import qutip
 import numpy as np
 
+from quest import Qureg, QuestOps
+
 
 class RxGateType(GateType):
     def __init__(self, name):
@@ -16,6 +18,9 @@ class RxGateType(GateType):
 
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
         circ.rx(instance.params[0], reg[instance.qubits[0]])
+
+    def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
+        QuestOps.rx(qureg, instance.qubits[0], instance.params[0])
 
 
 class RyGateType(GateType):
@@ -28,6 +33,9 @@ class RyGateType(GateType):
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
         circ.ry(instance.params[0], reg[instance.qubits[0]])
 
+    def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
+        QuestOps.ry(qureg, instance.qubits[0], instance.params[0])
+
 
 class RzGateType(GateType):
     def __init__(self, name):
@@ -39,6 +47,9 @@ class RzGateType(GateType):
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
         circ.rz(instance.params[0], reg[instance.qubits[0]])
 
+    def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
+        QuestOps.rz(qureg, instance.qubits[0], instance.params[0])
+
 
 class CNotGateType(GateType):
     def __init__(self, name):
@@ -49,6 +60,9 @@ class CNotGateType(GateType):
 
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
         circ.cx(reg[instance.qubits[0]], reg[instance.qubits[1]])
+
+    def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
+        QuestOps.cnot(qureg, instance.qubits[0], instance.qubits[1])
 
 
 class SqrtswapGateType(GateType):
@@ -84,13 +98,8 @@ class CombinedGateType(GateType):
         return op
 
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
-        p = self.decompose_params(instance.params)
-        regs = [reg[q] for q in instance.qubits]
-        i = 0
-        for gate_type, targets in self.gate_placements:
-            fake_instance = GateInstance(gate_type, targets, p[i:i + gate_type.num_params])
-            gate_type.to_qiskit_circuit(fake_instance, circ, regs)
-            i += gate_type.num_params
+        for q in self._decompose(instance):
+            q.typ.to_qiskit_circuit(q, circ, reg)
 
     @staticmethod
     def _expand_gate(op: qutip.Qobj, from_qubits: int, to_qubits: int, targets: List[int]):
@@ -102,6 +111,20 @@ class CombinedGateType(GateType):
             return qutip.gate_expand_2toN(op, to_qubits, targets=targets)
         else:
             raise ValueError('Unsupported from_qubits value')
+
+    def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
+        for q in self._decompose(instance):
+            q.typ.execute_on_quest_qureg(qureg, q)
+
+    def _decompose(self, instance: GateInstance) -> List[GateInstance]:
+        p = self.decompose_params(instance.params)
+        instances = []
+        i = 0
+        for gate_type, relative_qubits in self.gate_placements:
+            abs_qubits = [instance.qubits[i] for i in relative_qubits]
+            instances.append(GateInstance(gate_type, abs_qubits, p[i:i + gate_type.num_params]))
+            i += gate_type.num_params
+        return instances
 
 
 class BlockGateType(CombinedGateType):

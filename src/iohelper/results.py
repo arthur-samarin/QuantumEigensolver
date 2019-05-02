@@ -12,6 +12,12 @@ def load(collection_name, file_name):
     cdir = get_collection_dir(collection_name)
     with open(os.path.join(cdir, file_name), 'rb') as f:
         return pickle.load(f)
+    
+    
+def load_all(collection_name):
+    cdir = get_collection_dir(collection_name)
+    for f in os.listdir(cdir):
+        yield load(collection_name, f)
 
 
 def get_collection_dir(collection_name):

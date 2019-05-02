@@ -6,6 +6,8 @@ import numpy as np
 import qutip
 import qiskit as qk
 
+from quest import QuestOps, Qureg
+
 
 class QCircuit:
     def __init__(self, num_qubits: int, initial_classical_state: int, gates: List["GateInstance"]):
@@ -78,6 +80,9 @@ class GateType:
         raise NotImplemented()
 
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
+        raise NotImplemented()
+
+    def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance"):
         raise NotImplemented()
 
     def reset_parameters(self, instance: "GateInstance"):

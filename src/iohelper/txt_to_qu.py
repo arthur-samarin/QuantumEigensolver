@@ -47,12 +47,14 @@ class MeasurementOp:
 
 
 if __name__ == '__main__':
+    import os
     N = 4
-    name = 'H_LiH_N=4'
-    op = MeasurementOp.from_file(N, 'input/{}.txt'.format(name))
-    H = op.to_qobj()
-    H2 = qio.qu_load(name)
-    qio.qu_save(name, H)
+    # for name in os.listdir('input/h2'):
+    for name in ['H_H2_N=4_R=2.3.txt']:
+        op = MeasurementOp.from_file(N, 'input/h2/{}'.format(name))
+        H = op.to_qobj()
+        qio.qu_save(name.replace('.txt', ''), H)
+        print(H)
 
-    import numpy as np
-    print(np.max(np.abs(H.full() - H2.full())))
+    r = qio.qu_load('h2/H_H2_N=4_R=2.3')
+    print(r)
