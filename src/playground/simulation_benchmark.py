@@ -1,3 +1,4 @@
+from algo.cvqe_wrapper import CVqe
 from algo.func_optimizer import BfgsOptimizer, CmaesOptimizer, Optimizer
 from circuit import QCircuit, QCircuitConversions, GateTypes, GateInstance
 import qiskit as qk
@@ -60,13 +61,24 @@ def benchmark_circuit(name, circ: QCircuit):
         def vqe_func():
             bounds = circ.parameters_bounds
             circ.reset_parameters()
-            optimizer.optimize(func_to_minimize, circ.get_parameters(), bounds)
+            o = optimizer.optimize(func_to_minimize, circ.get_parameters(), bounds)
+            return o.f_opt
 
         start = time.time()
-        vqe_func()
+        f_opt = vqe_func()
         end = time.time()
         print('  {}'.format(name))
         print('    Evaluations/s: {:.3f}'.format(1.0 * num_evaluations[0] / (end - start)))
+        print('    #Evaluations: {}'.format(num_evaluations[0]))
+        print('    Optimizations/s: {:.3f}'.format(1.0 / (end - start)))
+
+    def benchmark_cvqe(name: str, v: CVqe):
+        start = time.time()
+        result = v.optimize(circ)
+        end = time.time()
+        print('  {}'.format(name))
+        print('    Evaluations/s: {:.3f}'.format(1.0 * result.num_evaluations / (end - start)))
+        print('    #Evaluations: {}'.format(result.num_evaluations))
         print('    Optimizations/s: {:.3f}'.format(1.0 / (end - start)))
 
 
@@ -78,10 +90,12 @@ def benchmark_circuit(name, circ: QCircuit):
     task = hamiltonians.for_qubits(circ.num_qubits)
     if task:
         H = task.H
+        cvqe = CVqe(H, 0.0001)
+        benchmark_cvqe('CVqe', cvqe)
         benchmark_vqe('Vqe (bfgs, QuEST)', BfgsOptimizer(), compute_via_quest, H)
-        benchmark_vqe('Vqe (CMA-ES, QuEST)', CmaesOptimizer(0.0016), compute_via_quest, H)
+        benchmark_vqe('Vqe (CMA-ES, QuEST)', CmaesOptimizer(0.0001), compute_via_quest, H)
         benchmark_vqe('Vqe (bfgs, Qutip)', BfgsOptimizer(), compute_via_qutip, H)
-        benchmark_vqe('Vqe (CMA-ES, Qutip)', CmaesOptimizer(0.0016), compute_via_qutip, H)
+        benchmark_vqe('Vqe (CMA-ES, Qutip)', CmaesOptimizer(0.0001), compute_via_qutip, H)
 
     benchmark('Evaluations/s (QuEST)', compute_via_quest)
     benchmark('Evaluations/s (Qutip)', compute_via_qutip)

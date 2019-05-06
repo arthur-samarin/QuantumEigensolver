@@ -22,6 +22,9 @@ class RxGateType(GateType):
     def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
         QuestOps.rx(qureg, instance.qubits[0], instance.params[0])
 
+    def add_to_cvqe(self, instance: "GateInstance", c, gt):
+        c.add_gate(gt.rx(), instance.qubits)
+
 
 class RyGateType(GateType):
     def __init__(self, name):
@@ -35,6 +38,9 @@ class RyGateType(GateType):
 
     def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
         QuestOps.ry(qureg, instance.qubits[0], instance.params[0])
+
+    def add_to_cvqe(self, instance: "GateInstance", c, gt):
+        c.add_gate(gt.ry(), instance.qubits)
 
 
 class RzGateType(GateType):
@@ -50,6 +56,9 @@ class RzGateType(GateType):
     def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
         QuestOps.rz(qureg, instance.qubits[0], instance.params[0])
 
+    def add_to_cvqe(self, instance: "GateInstance", c, gt):
+        c.add_gate(gt.rz(), instance.qubits)
+
 
 class CNotGateType(GateType):
     def __init__(self, name):
@@ -63,6 +72,9 @@ class CNotGateType(GateType):
 
     def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance") -> None:
         QuestOps.cnot(qureg, instance.qubits[0], instance.qubits[1])
+
+    def add_to_cvqe(self, instance: "GateInstance", c, gt):
+        c.add_gate(gt.cnot(), instance.qubits)
 
 
 class SqrtswapGateType(GateType):
@@ -159,6 +171,9 @@ class BlockAGateType(CombinedGateType):
 
     def decompose_params(self, p: np.ndarray):
         return np.array([p[0], p[1], p[2], p[3], -p[1], -p[0], -p[3], -p[2]])
+
+    def add_to_cvqe(self, instance: "GateInstance", c, gt):
+        c.add_gate(gt.block_a(), instance.qubits)
 
 
 class BlockBGateType(CombinedGateType):

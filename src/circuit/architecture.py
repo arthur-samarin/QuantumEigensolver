@@ -82,6 +82,10 @@ class GateType:
     def to_qiskit_circuit(self, instance: "GateInstance", circ: qk.QuantumCircuit, reg: qk.QuantumRegister) -> None:
         raise NotImplemented()
 
+    def add_to_cvqe(self, instance: "GateInstance", c, gt):
+        raise NotImplemented()
+
+
     def execute_on_quest_qureg(self, qureg: Qureg, instance: "GateInstance"):
         raise NotImplemented()
 

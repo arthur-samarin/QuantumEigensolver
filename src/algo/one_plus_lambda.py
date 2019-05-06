@@ -74,7 +74,7 @@ class OnePlusLambda:
                         self.mutation.apply(circuit_clone)
                         if num_iterations_without_progress >= 10:
                             # Try to do more complex mutations
-                            for j in range(0, num_iterations_without_progress // 2):
+                            for j in range(0, 1):
                                 self.mutation.apply(circuit_clone)
                         mutated_circuits.append(circuit_clone)
 

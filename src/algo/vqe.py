@@ -16,6 +16,11 @@ class VqeResult:
 
 
 class Vqe:
+    def optimize(self, circ: QCircuit) -> VqeResult:
+        raise NotImplemented()
+
+
+class PyVqe:
     def __init__(self, optimizer: Optimizer, hamiltonian: Qobj):
         self.N = N_from_qobj(hamiltonian)
         self.H = hamiltonian
