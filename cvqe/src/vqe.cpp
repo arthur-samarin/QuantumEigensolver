@@ -91,6 +91,8 @@ VqeResult Vqe::optimize(QCircuit &circuit) {
 
         double sigma = 0.5;
         GenoPheno<pwqBoundStrategy> gp(&lBounds[0], &uBounds[0], dim);
+
+
         CMAParameters<GenoPheno<pwqBoundStrategy>> cmaparams(x0, sigma, -1, 0, gp);
         cmaparams.set_ftolerance(ftol);
         if (iterBudget > 0) {
@@ -100,12 +102,11 @@ VqeResult Vqe::optimize(QCircuit &circuit) {
             cmaparams.set_max_fevals(evalBudget);
         }
 
-        //cmaparams.set_algo(BIPOP_CMAES);
         CMASolutions cmasols = cmaes<>(fitFunc, cmaparams);
 
         destroyQureg(reg, questEnv);
 
-        return VqeResult(cmasols.fevals(), cmasols.elapsed_time(), cmasols.best_candidate().get_x_dvec(),
+        return VqeResult(cmasols.fevals(), cmasols.elapsed_time(), gp.pheno(cmasols.best_candidate().get_x_dvec()),
                 cmasols.best_candidate().get_fvalue());
     } catch (const std::string &ex) {
         destroyQureg(reg, questEnv);

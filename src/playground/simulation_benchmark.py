@@ -25,6 +25,9 @@ def benchmark(name, func, max_n=1000, max_time=3.0):
 
 def benchmark_circuit(name, circ: QCircuit):
     qk_circuit = QCircuitConversions.to_qiskit_circuit(circ)
+    qk_circuit.draw(output='mpl', filename='{}.png'.format(name))
+    return None
+
     qk_backend = qk.BasicAer.get_backend('statevector_simulator')
 
     def compute_via_quest():
@@ -92,10 +95,11 @@ def benchmark_circuit(name, circ: QCircuit):
         H = task.H
         cvqe = CVqe(H, 0.0001)
         benchmark_cvqe('CVqe', cvqe)
-        benchmark_vqe('Vqe (bfgs, QuEST)', BfgsOptimizer(), compute_via_quest, H)
+        # benchmark_vqe('Vqe (bfgs, QuEST)', BfgsOptimizer(), compute_via_quest, H)
         benchmark_vqe('Vqe (CMA-ES, QuEST)', CmaesOptimizer(0.0001), compute_via_quest, H)
-        benchmark_vqe('Vqe (bfgs, Qutip)', BfgsOptimizer(), compute_via_qutip, H)
+        # benchmark_vqe('Vqe (bfgs, Qutip)', BfgsOptimizer(), compute_via_qutip, H)
         benchmark_vqe('Vqe (CMA-ES, Qutip)', CmaesOptimizer(0.0001), compute_via_qutip, H)
+        # benchmark_vqe('Vqe (CMA-ES, Qiskit)', CmaesOptimizer(0.0001), compute_via_qiskit, H)
 
     benchmark('Evaluations/s (QuEST)', compute_via_quest)
     benchmark('Evaluations/s (Qutip)', compute_via_qutip)
@@ -123,7 +127,8 @@ def main():
     num_qubits = 4
     size = 4
     benchmark_circuit('Random with Block-A (size={})'.format(size), create_random_block_circuit(num_qubits, size, initial_state=0b1100))
-    benchmark_circuit('Random with CNOT and RX (1:8) (size={})'.format(size * 9), create_random_circuit(num_qubits, size, size * 8, initial_state=0b1100))
+    benchmark_circuit('Random with Block-A (size={})'.format(8), create_random_block_circuit(8, 4, initial_state=hamiltonians.q8.classical_psi0))
+    # benchmark_circuit('Random with CNOT and RX (1:8) (size={})'.format(size * 9), create_random_circuit(num_qubits, size, size * 8, initial_state=0b1100))
 
 
 if __name__ == '__main__':

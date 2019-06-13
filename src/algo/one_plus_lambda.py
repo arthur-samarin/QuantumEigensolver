@@ -38,15 +38,20 @@ class EvolutionReport:
     def best_circuit_value(self):
         return self.iterations[self.best_iteration_index].mutations[0].value
 
+    @property
+    def all_mutations(self):
+        return [m for i in self.iterations for m in i.mutations]
+
 
 class OnePlusLambda:
-    def __init__(self, target: float, vqe: Vqe, mutation: Mutation, initial: QCircuit, target_eps=0.0016, alambda: int = 8):
+    def __init__(self, target: float, vqe: Vqe, mutation: Mutation, initial: QCircuit, target_eps=0.0016, alambda: int = 8, max_ev: int = None):
         self.initial = initial
         self.vqe = vqe
         self.mutation = mutation
         self.target = target
         self.target_eps = target_eps
         self.alambda = alambda
+        self.max_ev = max_ev
         self.num_iterations = 0
         self.best_result: Optional[MutationReport] = None
 
@@ -54,6 +59,7 @@ class OnePlusLambda:
         iterations = []
         best_iteration_index = 0
         interrupted = False
+        num_evaluations_performed = 0
         iteration_start_time = time.time()
 
         with Pool(initializer=OnePlusLambda._initialize_subprocess, initargs=(self.vqe,)) as p:
@@ -64,7 +70,8 @@ class OnePlusLambda:
             num_iterations_without_progress = 0
             self.num_iterations = 0
             try:
-                while self.best_result.value > self.target + self.target_eps:
+                while self.best_result.value > self.target + self.target_eps \
+                        and (self.max_ev is None or num_evaluations_performed < self.max_ev):
                     iteration_start_time = time.time()
 
                     # Mutate
@@ -72,9 +79,10 @@ class OnePlusLambda:
                     for _ in range(self.alambda):
                         circuit_clone = self.best_result.circ.clone()
                         self.mutation.apply(circuit_clone)
-                        if num_iterations_without_progress >= 10:
+                        if num_iterations_without_progress >= 4:
                             # Try to do more complex mutations
-                            for j in range(0, 1):
+                            for j in range(0, int(num_iterations_without_progress**0.5)):
+                            # for j in range(0, 1):
                                 self.mutation.apply(circuit_clone)
                         mutated_circuits.append(circuit_clone)
 
@@ -83,8 +91,10 @@ class OnePlusLambda:
                     mutation_reports.sort(key=lambda r: r.value)
                     new_result: MutationReport = mutation_reports[0]
 
-                    # Increment iteration number
+                    # Increment iteration number and number of evaluations
                     self.num_iterations += 1
+                    for m in mutation_reports:
+                        num_evaluations_performed += m.num_circ_evaluations
 
                     # Check if better
                     is_better = new_result.value < self.best_result.value

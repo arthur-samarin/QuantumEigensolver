@@ -67,7 +67,7 @@ BOOST_PYTHON_MODULE (cvqe) {
     class_ < RzGateType, bases < GateType >> ("RzGateType", no_init);
     class_ < CnotGateType, bases < GateType >> ("CnotGateType", no_init);
     class_ < BlockAGateType, bases < GateType >> ("BlockAGateType", no_init);
-//    def("create_vector", &createVector);
+
     class_<GateTypes>("GateTypes", no_init)
             .def("rx", &GateTypes::rx, return_value_policy<reference_existing_object>()).staticmethod("rx")
             .def("ry", &GateTypes::ry, return_value_policy<reference_existing_object>()).staticmethod("ry")
@@ -87,5 +87,7 @@ BOOST_PYTHON_MODULE (cvqe) {
             .def_readonly("opt_value", &VqeResult::optValue);
     class_<Vqe>("Vqe", init<Eigen::MatrixXcd>())
             .def_readwrite("ftol", &Vqe::ftol)
+            .def_readwrite("eval_budget", &Vqe::evalBudget)
+            .def_readwrite("iter_budget", &Vqe::iterBudget)
             .def("optimize", &Vqe::optimize);
 }
